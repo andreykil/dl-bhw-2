@@ -1,5 +1,7 @@
 /.DS_Store
 /.venv
-/conditions.pdf
+/__pycache__
+__pycache__/
 /data
-/prepared_conditions.txt
+/documents
+/outputs

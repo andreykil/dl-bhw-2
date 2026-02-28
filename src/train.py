@@ -148,7 +148,7 @@ def train(
         )
 
         if scheduler is not None:
-            scheduler.step()
+            scheduler.step(val_loss)
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)

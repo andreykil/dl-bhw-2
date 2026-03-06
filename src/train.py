@@ -153,10 +153,10 @@ def train(model: torch.nn.Module,
           pad_idx: int,
           num_epochs: int,
           *,
-          val_dataset=None,                     # TranslationDataset instance (optional, for BLEU)
+          val_dataset=None,
           max_decoding_len: int = 50,
           detokenize_fn: Optional[Callable[[str], str]] = detokenize_english,
-          bleu_every: int = 1,                 # compute BLEU every N epochs (1 => every epoch)
+          bleu_every: int = 1,
           tmp_val_out: str = "outputs/val_predictions.en",
           device: torch.device = torch.device('cpu'),
           plot: bool = True):
@@ -168,9 +168,11 @@ def train(model: torch.nn.Module,
     val_bleus: Optional[List[float]] = [] if val_dataset is not None else None
 
     for epoch in range(1, num_epochs + 1):
+        teacher_forcing_ratio = max(0.0, 0.5 * (num_epochs - epoch) / num_epochs)
+
         train_loss, train_ppl = training_epoch(
             model, optimizer, criterion, train_loader, pad_idx,
-            teacher_forcing_ratio=0.5, tqdm_desc=f"Train {epoch}/{num_epochs}"
+            teacher_forcing_ratio=teacher_forcing_ratio, tqdm_desc=f"Train {epoch}/{num_epochs}"
         )
 
         val_loss, val_ppl = validation_epoch(

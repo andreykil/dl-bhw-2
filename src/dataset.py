@@ -29,28 +29,3 @@ class TranslationDataset(Dataset):
         src = self.encode(self.src_lines[idx])
         tgt = self.encode(self.tgt_lines[idx])
         return torch.LongTensor(src), torch.LongTensor(tgt)
-
-def collate_fn(batch):
-    # batch: list of (src_tensor, tgt_tensor)
-    srcs, tgts = zip(*batch)
-    PAD = None
-    # all examples share same sp model and PAD; get from first
-    PAD = max([ (x.max().item() if x.numel()>0 else 0) for x in srcs + tgts ])  # fallback
-    # safer: expect user to provide PAD externally; for simplicity, find pad as the largest id+1 - not ideal but works
-    src_lens = [s.size(0) for s in srcs]
-    tgt_lens = [t.size(0) for t in tgts]
-    max_src = max(src_lens)
-    max_tgt = max(tgt_lens)
-
-    # choose pad id from dataset knowledge: assume PAD = vocab_size+2, so use max id in batch +1 if that is larger
-    pad = max([int(s.max().item()) for s in srcs + tgts]) + 1
-
-    padded_src = torch.full((len(batch), max_src), pad, dtype=torch.long)
-    padded_tgt = torch.full((len(batch), max_tgt), pad, dtype=torch.long)
-    for i,(s,t) in enumerate(batch):
-        padded_src[i, :s.size(0)] = s
-        padded_tgt[i, :t.size(0)] = t
-
-    src_lens = torch.LongTensor(src_lens)
-    tgt_lens = torch.LongTensor(tgt_lens)
-    return padded_src, src_lens, padded_tgt, tgt_lens

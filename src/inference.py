@@ -2,6 +2,7 @@
 
 import torch
 
+@torch.no_grad()
 def greedy_decode(model, src_tensor, src_lens, pad_idx, bos_idx, eos_idx, max_decoding_len):
     model.eval()
 
@@ -9,25 +10,40 @@ def greedy_decode(model, src_tensor, src_lens, pad_idx, bos_idx, eos_idx, max_de
         enc_outputs, hidden = model.encoder(src_tensor, src_lens)
 
         batch_size = src_tensor.size(0)
-        inputs = torch.full((batch_size,), bos_idx).to(src_tensor.device)
+        device = src_tensor.device
 
+        # маска: True для валидных токенов, False для PAD
+        mask = (src_tensor != pad_idx).to(device)
+
+        inputs = torch.full((batch_size,), bos_idx, dtype=torch.long, device=device)
         outputs = [[] for _ in range(batch_size)]
+        finished = [False] * batch_size
 
         for _ in range(max_decoding_len):
-            logits, hidden, _ = model.decoder.forward_step(
-                inputs, hidden, enc_outputs
-            )
+            # передаём mask в forward_step
+            logits, hidden, _ = model.decoder.forward_step(inputs, hidden, enc_outputs, mask=mask)
 
-            inputs = logits.argmax(1)
-
+            next_tokens = logits.argmax(dim=1)  # (batch,)
+            # обновляем outputs и finished
             for i in range(batch_size):
-                token = inputs[i].item()
-                if token == eos_idx:
-                    continue
-                outputs[i].append(token)
+                tok = int(next_tokens[i].item())
+                if not finished[i]:
+                    if tok == eos_idx:
+                        finished[i] = True
+                    else:
+                        outputs[i].append(tok)
+
+            # для уже завершённых примеров подаём EOS, чтобы состояние не дрейфовало
+            next_inputs = next_tokens.clone()
+            for i in range(batch_size):
+                if finished[i]:
+                    next_inputs[i] = eos_idx
+            inputs = next_inputs
+
+            if all(finished):
+                break
 
         return outputs
-
 
 def translate_file(
     model,

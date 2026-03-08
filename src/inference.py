@@ -1,104 +1,118 @@
 # src/inference.py
 
 import torch
+from pathlib import Path
+from typing import List
+
 
 @torch.no_grad()
-def greedy_decode(model, src_tensor, src_lens, pad_idx, bos_idx, eos_idx, max_decoding_len):
+def greedy_decode(
+    model,
+    src: torch.Tensor,
+    dataset,
+    max_len: int,
+    device: torch.device,
+):
+    """
+    Универсальный greedy decoding.
+    Работает со всеми моделями с .encode() и .decode()
+    """
+
     model.eval()
 
-    with torch.no_grad():
-        enc_outputs, hidden = model.encoder(src_tensor, src_lens)
+    BOS = dataset.BOS
+    EOS = dataset.EOS
 
-        batch_size = src_tensor.size(0)
-        device = src_tensor.device
+    batch_size = src.shape[0]
 
-        # маска: True для валидных токенов, False для PAD
-        mask = (src_tensor != pad_idx).to(device)
+    memory, src_mask = model.encode(src.to(device))
 
-        inputs = torch.full((batch_size,), bos_idx, dtype=torch.long, device=device)
-        outputs = [[] for _ in range(batch_size)]
-        finished = [False] * batch_size
+    ys = torch.full((batch_size, 1), BOS, dtype=torch.long, device=device)
 
-        for _ in range(max_decoding_len):
-            # передаём mask в forward_step
-            logits, hidden, _ = model.decoder.forward_step(inputs, hidden, enc_outputs, mask=mask)
+    outputs = [[] for _ in range(batch_size)]
+    finished = [False] * batch_size
 
-            next_tokens = logits.argmax(dim=1)  # (batch,)
-            # обновляем outputs и finished
-            for i in range(batch_size):
-                tok = int(next_tokens[i].item())
-                if not finished[i]:
-                    if tok == eos_idx:
-                        finished[i] = True
-                    else:
-                        outputs[i].append(tok)
+    for _ in range(max_len):
 
-            # для уже завершённых примеров подаём EOS, чтобы состояние не дрейфовало
-            next_inputs = next_tokens.clone()
-            for i in range(batch_size):
-                if finished[i]:
-                    next_inputs[i] = eos_idx
-            inputs = next_inputs
+        logits = model.decode(ys, memory, src_mask)
+        logits = logits[:, -1, :dataset.vocab_size]
+        
+        next_token = logits.argmax(-1)
 
-            if all(finished):
-                break
+        for i in range(batch_size):
 
-        return outputs
+            if not finished[i]:
+
+                token = int(next_token[i].item())
+
+                if token == EOS:
+                    finished[i] = True
+                else:
+                    if token < dataset.vocab_size:
+                        outputs[i].append(token)
+
+        ys = torch.cat([ys, next_token.unsqueeze(1)], dim=1)
+
+        if all(finished):
+            break
+
+    return outputs
+
 
 def translate_file(
     model,
     dataset,
-    input_lines,
-    max_decoding_len,
-    device,
-    output_path
+    input_lines: List[str],
+    max_decoding_len: int,
+    device: torch.device,
+    output_path: str,
+    batch_size: int = 64,
 ):
-    bos = dataset.BOS
-    eos = dataset.EOS
-    pad = dataset.PAD
-    sp = dataset.sp
 
     model.eval()
 
-    batch_size = 64
-    all_outputs = []
+    predictions = []
 
     for i in range(0, len(input_lines), batch_size):
-        batch = input_lines[i:i+batch_size]
-        encoded = [dataset.encode(x) for x in batch]
 
-        max_len = max(len(x) for x in encoded)
+        batch_lines = input_lines[i : i + batch_size]
+
+        encoded = [dataset.encode(x) for x in batch_lines]
+
+        max_src_len = max(len(x) for x in encoded)
 
         src_tensor = torch.full(
-            (len(encoded), max_len),
-            pad
-        ).long()
-
-        src_lens = []
+            (len(encoded), max_src_len),
+            dataset.PAD,
+            dtype=torch.long
+        )
 
         for j, seq in enumerate(encoded):
             src_tensor[j, :len(seq)] = torch.tensor(seq)
-            src_lens.append(len(seq))
 
         src_tensor = src_tensor.to(device)
-        src_lens = torch.tensor(src_lens).to(device)
 
-        ids = greedy_decode(
+        ids_batch = greedy_decode(
             model,
             src_tensor,
-            src_lens,
-            pad,
-            bos,
-            eos,
-            max_decoding_len
+            dataset,
+            max_decoding_len,
+            device
         )
 
-        for seq in ids:
+        for seq in ids_batch:
+
             filtered = [x for x in seq if x < dataset.vocab_size]
-            all_outputs.append(
-                sp.decode_ids(filtered) if filtered else ""
-            )
+
+            text = dataset.sp.decode_ids(filtered) if filtered else ""
+
+            predictions.append(text)
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
-        for line in all_outputs:
+
+        for line in predictions:
             f.write(line.strip() + "\n")
+
+    return predictions

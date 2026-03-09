@@ -136,12 +136,11 @@ class TransformerMT(nn.Module):
     # -------------------------
     # Forward for training
     # -------------------------
-    def forward(self, src: Tensor, src_lens: Optional[Tensor], tgt: Tensor, pad_idx: Optional[int] = None) -> Tensor:
+    def forward(self, src: Tensor, tgt: Tensor, pad_idx: Optional[int] = None) -> Tensor:
         """
         Training forward: expects tgt with BOS at pos 0; returns logits for positions 1..len(tgt)-1
         logits shape: (batch, tgt_len-1, vocab)
         """
-        _ = src_lens  # not required here but kept for API compatibility
         memory, src_mask = self.encode(src)
         tgt_input = tgt[:, :-1]  # drop last token (EOS) as input to decoder
         logits = self.decode(tgt_input, memory, src_mask)

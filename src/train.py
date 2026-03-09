@@ -74,10 +74,9 @@ def training_epoch(model: torch.nn.Module,
     for src, src_lens, tgt, tgt_lens in loader:
         src = src.to(device)
         tgt = tgt.to(device)
-        src_lens = src_lens.to(device)
 
         optimizer.zero_grad()
-        outputs = model(src, src_lens, tgt, pad_idx)
+        outputs = model(src, tgt)
         # outputs shape: (batch, tgt_len-1, vocab)
         target = tgt[:, 1:]  # skip BOS
         loss = criterion(outputs.reshape(-1, outputs.size(-1)), target.reshape(-1))
@@ -109,9 +108,8 @@ def validation_epoch(model: torch.nn.Module,
     for src, src_lens, tgt, tgt_lens in loader:
         src = src.to(device)
         tgt = tgt.to(device)
-        src_lens = src_lens.to(device)
 
-        outputs = model(src, src_lens, tgt, pad_idx)
+        outputs = model(src, tgt)
         target = tgt[:, 1:]
         loss = criterion(outputs.reshape(-1, outputs.size(-1)), target.reshape(-1))
 

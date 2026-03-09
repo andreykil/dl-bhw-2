@@ -5,9 +5,6 @@ import torch
 from torch.utils.data import Sampler, DataLoader
 
 class TokenBatchSampler(Sampler):
-    """
-    Формирует батчи по количеству токенов.
-    """
 
     def __init__(
         self,
@@ -21,7 +18,6 @@ class TokenBatchSampler(Sampler):
         self.pool_size = pool_size
         self.shuffle = shuffle
 
-        # заранее считаем длины
         self.src_lens = [len(dataset.encode(x)) for x in dataset.src_lines]
         self.tgt_lens = [len(dataset.encode(x)) for x in dataset.tgt_lines]
 
@@ -32,14 +28,14 @@ class TokenBatchSampler(Sampler):
         if self.shuffle:
             random.shuffle(indices)
 
+        batches = []
+
         for i in range(0, len(indices), self.pool_size):
 
             pool = indices[i:i+self.pool_size]
 
-            pool.sort(
-                key=lambda x: max(self.src_lens[x], self.tgt_lens[x]),
-                reverse=True
-            )
+            # sort only inside pool
+            pool.sort(key=lambda x: max(self.src_lens[x], self.tgt_lens[x]))
 
             batch = []
             max_src = 0
@@ -64,13 +60,20 @@ class TokenBatchSampler(Sampler):
 
                 else:
 
-                    yield batch
+                    batches.append(batch)
                     batch = [idx]
                     max_src = src_len
                     max_tgt = tgt_len
 
             if batch:
-                yield batch
+                batches.append(batch)
+
+        # shuffle batches
+        if self.shuffle:
+            random.shuffle(batches)
+
+        for batch in batches:
+            yield batch
 
 class CollateFn:
     """Callable class для collate"""
@@ -97,9 +100,14 @@ class CollateFn:
         return src_tensor, src_lens, tgt_tensor, tgt_lens
 
 
-def create_token_dataloader(dataset, tokens_per_batch):
+def create_token_dataloader(dataset, tokens_per_batch, shuffle=True):
 
-    sampler = TokenBatchSampler(dataset, tokens_per_batch)
+    sampler = TokenBatchSampler(
+        dataset,
+        tokens_per_batch=tokens_per_batch,
+        shuffle=shuffle
+    )
+
     return DataLoader(
         dataset,
         batch_sampler=sampler,

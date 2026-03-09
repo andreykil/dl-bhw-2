@@ -168,6 +168,7 @@ def train(model: torch.nn.Module,
           tmp_val_out: str = "outputs/val_predictions.en",
           device: torch.device = torch.device('cpu'),
           inference_batch_size: int = 64,
+          no_repeat_ngram_size: int = 3,
           plot: bool = True):
     """
     Full training loop that uses per-batch inverse-sqrt scheduler (if provided).
@@ -211,7 +212,8 @@ def train(model: torch.nn.Module,
                 max_decoding_len=max_decoding_len,
                 device=device,
                 output_path=tmp_val_out,
-                batch_size=inference_batch_size
+                batch_size=inference_batch_size,
+                no_repeat_ngram_size=no_repeat_ngram_size,
             )
 
             refs_raw = list(val_dataset.tgt_lines)

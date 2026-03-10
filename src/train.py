@@ -80,7 +80,7 @@ def _plot_metrics(train_losses,
         epochs = range(1, len(bleu_greedy) + 1)
 
         axs[2].plot(epochs, bleu_greedy, label='BLEU greedy', marker='o')
-        # axs[2].plot(epochs, bleu_beam, label='BLEU beam', marker='o')
+        axs[2].plot(epochs, bleu_beam, label='BLEU beam', marker='o')
 
         axs[2].set_xlabel('epoch')
         axs[2].set_ylabel('BLEU')
@@ -251,23 +251,23 @@ def train(model,
             bleu1 = sacrebleu.corpus_bleu(preds_greedy, [refs]).score
 
             # BEAM
-            # preds_beam = translate_file(
-            #     model=model,
-            #     dataset=val_dataset,
-            #     input_lines=val_input_lines,
-            #     max_decoding_len=max_decoding_len,
-            #     device=device,
-            #     output_path=tmp_val_out,
-            #     batch_size=inference_batch_size,
-            #     mode="beam",
-            #     beam_size=5,
-            #     no_repeat_ngram_size=no_repeat_ngram_size,
-            # )
+            preds_beam = translate_file(
+                model=model,
+                dataset=val_dataset,
+                input_lines=val_input_lines,
+                max_decoding_len=max_decoding_len,
+                device=device,
+                output_path=tmp_val_out,
+                batch_size=inference_batch_size,
+                mode="beam",
+                beam_size=5,
+                no_repeat_ngram_size=no_repeat_ngram_size,
+            )
 
-            # bleu2 = sacrebleu.corpus_bleu(preds_beam, [refs]).score
+            bleu2 = sacrebleu.corpus_bleu(preds_beam, [refs]).score
 
             bleu_greedy.append(bleu1)
-            # bleu_beam.append(bleu2)
+            bleu_beam.append(bleu2)
 
             print(
                 f"Epoch {epoch}: "
@@ -275,7 +275,7 @@ def train(model,
                 f"val_loss={val_loss:.4f} "
                 f"val_ppl={val_ppl:.2f} "
                 f"BLEU_greedy={bleu1:.2f} "
-                # f"BLEU_beam={bleu2:.2f}"
+                f"BLEU_beam={bleu2:.2f}"
             )
 
         else:
@@ -294,7 +294,7 @@ def train(model,
                 train_ppls,
                 val_ppls,
                 bleu_greedy,
-                # bleu_beam
+                bleu_beam
             )
 
     return train_losses, val_losses, train_ppls, val_ppls, bleu_greedy, bleu_beam
